@@ -1,27 +1,13 @@
 # 3ER-DEPARTAMENTAL-PROYECTO 
-/PROYECTO_GESTION_TAREAS
-│
-├── BACKEND_FASTAPI
-│   ├── requirements.txt
-│   ├── main.py
-│   ├── database.py
-│   ├── models.py
-│   ├── schemas.py
-│   ├── auth.py
-│   └── dependencies.py
-│
-└── FLUTTER_APP
-    ├── pubspec.yaml
-    └── lib
-        └── main.dart
+=====================================================
+= PROYECTO_GESTION_TAREAS (FASTAPI + FLUTTER)
+= TODO EL PROYECTO EN UN SOLO CÓDIGO
+=====================================================
 
-# =====================================================================
-# ======================= BACKEND_FASTAPI ==============================
-# =====================================================================
 
-# =========================
-# requirements.txt
-# =========================
+#####################################################
+# BACKEND_FASTAPI/requirements.txt
+#####################################################
 fastapi
 uvicorn
 sqlalchemy
@@ -30,9 +16,9 @@ passlib[bcrypt]
 pydantic
 
 
-# =========================
-# database.py
-# =========================
+#####################################################
+# BACKEND_FASTAPI/database.py
+#####################################################
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
@@ -47,22 +33,24 @@ SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
 
-# =========================
-# models.py
-# =========================
+#####################################################
+# BACKEND_FASTAPI/models.py
+#####################################################
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
-from database import Base
 from datetime import datetime
+from database import Base
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer, primary_key=True)
-    email = Column(String, unique=True)
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
     password = Column(String)
 
 class Task(Base):
     __tablename__ = "tasks"
-    id = Column(Integer, primary_key=True)
+
+    id = Column(Integer, primary_key=True, index=True)
     title = Column(String)
     description = Column(String)
     priority = Column(String)
@@ -72,9 +60,9 @@ class Task(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
 
 
-# =========================
-# schemas.py
-# =========================
+#####################################################
+# BACKEND_FASTAPI/schemas.py
+#####################################################
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -90,9 +78,9 @@ class TaskBase(BaseModel):
     due_date: datetime
 
 
-# =========================
-# auth.py
-# =========================
+#####################################################
+# BACKEND_FASTAPI/auth.py
+#####################################################
 from passlib.context import CryptContext
 from jose import jwt
 from datetime import datetime, timedelta
@@ -100,7 +88,7 @@ from datetime import datetime, timedelta
 SECRET_KEY = "SUPER_SECRET_KEY_123"
 ALGORITHM = "HS256"
 
-pwd_context = CryptContext(schemes=["bcrypt"])
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def hash_password(password: str):
     return pwd_context.hash(password)
@@ -116,12 +104,12 @@ def create_token(user_id: int):
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-# =========================
-# dependencies.py
-# =========================
+#####################################################
+# BACKEND_FASTAPI/dependencies.py
+#####################################################
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from jose import jwt, JWTError
 from auth import SECRET_KEY, ALGORITHM
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -131,12 +119,12 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return int(payload["sub"])
     except JWTError:
-        raise HTTPException(status_code=401, detail="Token inválido")
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
-# =========================
-# main.py
-# =========================
+#####################################################
+# BACKEND_FASTAPI/main.py
+#####################################################
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import Base, engine, SessionLocal
@@ -147,7 +135,7 @@ from dependencies import get_current_user
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="API Gestión de Tareas")
+app = FastAPI(title="Task Management API")
 
 def get_db():
     db = SessionLocal()
@@ -159,20 +147,22 @@ def get_db():
 @app.post("/auth/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == user.email).first():
-        raise HTTPException(400, "Usuario ya existe")
+        raise HTTPException(400, "User already exists")
+
     db_user = User(
         email=user.email,
         password=hash_password(user.password)
     )
     db.add(db_user)
     db.commit()
-    return {"message": "Usuario registrado"}
+    return {"message": "User registered successfully"}
 
 @app.post("/auth/login")
 def login(user: UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.email == user.email).first()
     if not db_user or not verify_password(user.password, db_user.password):
-        raise HTTPException(401, "Credenciales incorrectas")
+        raise HTTPException(401, "Invalid credentials")
+
     return {"access_token": create_token(db_user.id)}
 
 @app.post("/tasks")
@@ -184,21 +174,20 @@ def create_task(
     new_task = Task(**task.dict(), user_id=user_id)
     db.add(new_task)
     db.commit()
+    db.refresh(new_task)
     return new_task
 
 @app.get("/tasks")
-def list_tasks(
+def get_tasks(
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     return db.query(Task).filter(Task.user_id == user_id).all()
-// =====================================================================
-// =========================== FLUTTER_APP ==============================
-// =====================================================================
 
-// =========================
-// pubspec.yaml
-// =========================
+
+#####################################################
+# FLUTTER_APP/pubspec.yaml
+#####################################################
 name: task_app
 version: 1.0.0
 
@@ -211,9 +200,9 @@ dependencies:
   http: ^1.2.0
 
 
-// =========================
-// lib/main.dart
-// =========================
+#####################################################
+# FLUTTER_APP/lib/main.dart
+#####################################################
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -229,7 +218,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       debugShowCheckedModeBanner: false,
       home: LoginScreen(),
     );
@@ -237,23 +226,22 @@ class MyApp extends StatelessWidget {
 }
 
 class LoginScreen extends StatelessWidget {
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
+  const LoginScreen({super.key});
 
   Future<void> login(BuildContext context) async {
     final response = await http.post(
       Uri.parse("$API_URL/auth/login"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
-        "email": emailController.text,
-        "password": passwordController.text,
+        "email": "test@test.com",
+        "password": "123456"
       }),
     );
 
     if (response.statusCode == 200) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => Dashboard()),
+        MaterialPageRoute(builder: (_) => const Dashboard()),
       );
     }
   }
@@ -262,25 +250,10 @@ class LoginScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Login")),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: emailController,
-              decoration: const InputDecoration(labelText: "Email"),
-            ),
-            TextField(
-              controller: passwordController,
-              decoration: const InputDecoration(labelText: "Password"),
-              obscureText: true,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => login(context),
-              child: const Text("Ingresar"),
-            ),
-          ],
+      body: Center(
+        child: ElevatedButton(
+          onPressed: () => login(context),
+          child: const Text("Login"),
         ),
       ),
     );
@@ -288,6 +261,8 @@ class LoginScreen extends StatelessWidget {
 }
 
 class Dashboard extends StatelessWidget {
+  const Dashboard({super.key});
+
   Future<double> getBitcoinPrice() async {
     final response = await http.get(
       Uri.parse(
@@ -303,10 +278,12 @@ class Dashboard extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text("Dashboard")),
       body: Center(
-        child: FutureBuilder<double>(
+        child: FutureBuilder(
           future: getBitcoinPrice(),
           builder: (_, snapshot) {
-            if (!snapshot.hasData) return const CircularProgressIndicator();
+            if (!snapshot.hasData) {
+              return const CircularProgressIndicator();
+            }
             return Text(
               "Bitcoin USD: \$${snapshot.data}",
               style: const TextStyle(fontSize: 22),
@@ -317,3 +294,4 @@ class Dashboard extends StatelessWidget {
     );
   }
 }
+
